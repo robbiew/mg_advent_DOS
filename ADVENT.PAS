@@ -22,15 +22,101 @@ Begin
     Mem[$B800: i] := 0;  { Clear both character and attribute bytes }
 End;
 
-Procedure CursorOff;
+Function IntToStr(Value: Integer): String;
+Var
+  Temp: String;
 Begin
-  ansi_GotoXY(0, 0); { Move cursor off-screen in ANSI terminals }
+  Str(Value, Temp);  { Convert the integer to a string }
+  IntToStr := Temp;
 End;
 
-Procedure CursorOn;
+
+Procedure DisplayCenteredDate(Y: Byte);
+Var
+  Year, Month, Day, Dow: Word;
+  DateStr: String;
+  CenterX:Byte; { Example: CenterX is a constant and holds the value 40 }
+Const
+  MonthNames: Array[1..12] of String[9] = (
+    'January', 
+    'February', 
+    'March', 
+    'April', 
+    'May', 
+    'June', 
+    'July', 
+    'August', 
+    'September', 
+    'October', 
+    'November', 
+    'December'
+  );
+  
 Begin
-  ansi_GotoXY(1, 1); { Restore cursor to default position }
+  { Get the current date }
+  GetDate(Year, Month, Day, Dow);
+
+  { Format the date string }
+  DateStr := MonthNames[Month] + ' ' + IntToStr(Day) + ', ' + IntToStr(Year);
+
+  { Calculate the X position to center the string }
+  CenterX := (80 - Length(DateStr)) Div 2;
+
+  { Position the cursor and write the date }
+  ansi_GotoXY(CenterX, Y);
+  SendLn('|10' + DateStr); { |10 sets light green color, modify as needed }
 End;
+
+Procedure DisplayComebackScreen(Y: Byte);
+Var
+  Year, Month, Day, Dow: Word;
+  DateStr, Message: String;
+  CenterX: Byte;
+Const
+  MonthNames: Array[1..12] of String[9] = (
+    'January', 
+    'February', 
+    'March', 
+    'April', 
+    'May', 
+    'June', 
+    'July', 
+    'August', 
+    'September', 
+    'October', 
+    'November', 
+    'December'
+  );
+Begin
+  { Get the current date }
+  GetDate(Year, Month, Day, Dow);
+
+  If (Month = 12) And (Day < 25) Then
+  Begin
+    { Tomorrow's Art }
+    DateStr := MonthNames[Month] + ' ' + IntToStr(Day + 1) + ', ' + IntToStr(Year);
+    Message := 'Tomorrow: ' + DateStr;
+  End
+  Else If (Month = 12) And (Day >= 25) Then
+  Begin
+    { See you next year! }
+    Message := 'See you next year!';
+  End
+  Else
+  Begin
+    { Out of Advent season }
+    Message := 'Advent Calendar is only active in December.';
+  End;
+
+  { Calculate the X position to center the string }
+  CenterX := (80 - Length(Message)) Div 2;
+
+  { Position the cursor and write the message }
+  ansi_GotoXY(CenterX, Y);
+  SendLn('|10' + Message); { |10 sets light green color, modify as needed }
+End;
+
+
 
 Procedure DisplayWelcomeScreen;
 Begin
@@ -41,15 +127,9 @@ Begin
     Exit;
   End;
   SendFile(WELCOME_SCREEN, False); { Display the welcome screen }
+  DisplayCenteredDate(21); { Show the date centered on row 21 }
 End;
 
-Function IntToStr(Value: Integer): String;
-Var
-  Temp: String;
-Begin
-  Str(Value, Temp);  { Convert the integer to a string }
-  IntToStr := Temp;
-End;
 
 Procedure DisplayDay(Day: Integer);
 Const
@@ -91,10 +171,26 @@ Begin
 
   { Display only the first 24 rows (3840 bytes) }
   Move(Buffer, Mem[$B800:0000], MAX_DISPLAY_BYTES);
+
 End;
 
+procedure CursorOff;
+var
+  regs: registers;
+begin
+  regs.ah := $01;
+  regs.cx := $2000;
+  Intr($10, regs);
+end;
 
-
+procedure CursorOn;
+var
+  regs: registers;
+begin
+  regs.ah := $01;
+  regs.cx := $0607;
+  Intr($10, regs);
+end;
 
 Function AdventDay: Integer;
 Var
@@ -123,9 +219,14 @@ Begin
       Else If CurrentDay = AdventDay + 1 Then
       Begin
         If FExist(COMEBACK_SCREEN) Then
-          SendFile(COMEBACK_SCREEN, False)
+        Begin
+          SendFile(COMEBACK_SCREEN, False);
+          DisplayComebackScreen(21); { Ensure this line is included in the block }
+        End
         Else
+        Begin
           SendLn('|04Error: COMEBACK.ANS file not found.|CR');
+        End;
       End;
       LastDay := CurrentDay; { Update the last displayed day }
     End;
@@ -149,8 +250,6 @@ Begin
   Until False;
 End;
 
-
-
 Procedure StartAdventCalendar;
 Var
   Today: Integer;
@@ -172,6 +271,7 @@ Var
 Begin
   While True Do
   Begin
+    CursorOff;
     DisplayWelcomeScreen;
 
     While True Do
@@ -193,11 +293,12 @@ End;
 Var
   Res: Byte;
 Begin
+
   If ParamCount <> 1 Then
   Begin
     WriteLn;
-    WriteLn('AdventCalendar : A D32 Advent Calendar Door');
-    WriteLn('Syntax: AdventCalendar <Path to drop file>');
+    WriteLn('Advent: Mistigris Advent Calendar Door');
+    WriteLn('Syntax: Advent <Path to drop file>');
     Halt;
   End;
 
